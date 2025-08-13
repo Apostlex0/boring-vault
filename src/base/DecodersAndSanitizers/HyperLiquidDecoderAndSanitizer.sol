@@ -2,12 +2,15 @@
 pragma solidity 0.8.21;
 
 import {BaseDecoderAndSanitizer} from "src/base/DecodersAndSanitizers/BaseDecoderAndSanitizer.sol";
+import {DecoderCustomTypes} from "src/interfaces/DecoderCustomTypes.sol";
 
 contract HyperliquidDecoderAndSanitizer is BaseDecoderAndSanitizer {
 
     //============================== ERRORS ===============================
 
     error HyperliquidDecoderAndSanitizer__InvalidAddress();
+    error HyperliquidDecoderAndSanitizer__CallbackNotSupported();
+   
 
     //============================== WETHYPE ===============================
 
@@ -44,6 +47,93 @@ contract HyperliquidDecoderAndSanitizer is BaseDecoderAndSanitizer {
 
     function redeem(uint256) external pure returns (bytes memory addressesFound) {
         return addressesFound;
+    }
+
+    function previewRedeem(uint256, address) external pure returns (bytes memory addressesFound) {
+        return addressesFound;
+    }
+
+    //============================== FELIX (MORPHO) ===============================
+
+    function borrow(
+        DecoderCustomTypes.MarketParams calldata params,
+        uint256,
+        uint256,
+        address onBehalf,
+        address receiver
+    ) external pure returns (bytes memory addressesFound) {
+        // Validate addresses
+        if (onBehalf == address(0) || receiver == address(0)) 
+            revert HyperliquidDecoderAndSanitizer__InvalidAddress();
+
+        addressesFound = abi.encodePacked(
+            params.loanToken, 
+            params.collateralToken, 
+            params.oracle, 
+            params.irm, 
+            onBehalf, 
+            receiver
+        );
+    }
+
+    function repay(
+        DecoderCustomTypes.MarketParams calldata params,
+        uint256,
+        uint256,
+        address onBehalf,
+        bytes calldata data
+    ) external pure returns (bytes memory addressesFound) {
+        // Sanitize raw data - reject callbacks
+        if (data.length > 0) revert HyperliquidDecoderAndSanitizer__CallbackNotSupported();
+        // Validate onBehalf address
+        if (onBehalf == address(0)) revert HyperliquidDecoderAndSanitizer__InvalidAddress();
+
+        addressesFound = abi.encodePacked(
+            params.loanToken, 
+            params.collateralToken, 
+            params.oracle, 
+            params.irm, 
+            onBehalf
+        );
+    }
+
+    function supplyCollateral(
+        DecoderCustomTypes.MarketParams calldata params,
+        uint256,
+        address onBehalf,
+        bytes calldata data
+    ) external pure returns (bytes memory addressesFound) {
+        // Sanitize raw data - reject callbacks
+        if (data.length > 0) revert HyperliquidDecoderAndSanitizer__CallbackNotSupported();
+        // Validate onBehalf address
+        if (onBehalf == address(0)) revert HyperliquidDecoderAndSanitizer__InvalidAddress();
+        addressesFound = abi.encodePacked(
+            params.loanToken, 
+            params.collateralToken, 
+            params.oracle, 
+            params.irm, 
+            onBehalf
+        );
+    }
+    
+    function withdrawCollateral(
+        DecoderCustomTypes.MarketParams calldata params,
+        uint256,
+        address onBehalf,
+        address receiver
+    ) external pure returns (bytes memory addressesFound) {
+        // Validate addresses
+        if (onBehalf == address(0) || receiver == address(0)) 
+            revert HyperliquidDecoderAndSanitizer__InvalidAddress();
+
+        addressesFound = abi.encodePacked(
+            params.loanToken, 
+            params.collateralToken, 
+            params.oracle, 
+            params.irm, 
+            onBehalf, 
+            receiver
+        );
     }
 
     //============================== ERC20 ===============================

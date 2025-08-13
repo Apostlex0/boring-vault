@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.21;
 
-import {BoringVault} from "src/base/BoringVault.sol";
-import {ManagerWithMerkleVerification} from "src/base/Roles/ManagerWithMerkleVerification.sol";
+import {UManager, FixedPointMathLib, ManagerWithMerkleVerification, ERC20} from "src/micro-managers/UManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {DecoderCustomTypes} from "src/interfaces/DecoderCustomTypes.sol";
 
@@ -13,7 +12,7 @@ import {DecoderCustomTypes} from "src/interfaces/DecoderCustomTypes.sol";
  * @dev Executes: wHYPE -> HYPE -> stHYPE -> Felix supply wstHYPE -> Felix borrow wHYPE -> repeat
  *      Also handles unwinding for withdrawals: repay loans -> withdraw collateral -> unstake -> return wHYPE
  */
-contract WstHypeLoopingUManager {
+contract WstHypeLoopingUManager is UManager {
     
     // =============================== ERRORS ===============================
     
@@ -25,11 +24,6 @@ contract WstHypeLoopingUManager {
     error WstHypeLoopingUManager__BurnNotReady();
     
     // =============================== IMMUTABLES ===============================
-    
-    BoringVault public immutable vault;
-    ManagerWithMerkleVerification public immutable manager;
-    address public strategist;
-    address public owner;
     
     // Protocol addresses
     address public immutable wHYPE;
@@ -48,11 +42,8 @@ contract WstHypeLoopingUManager {
     uint256 public constant LEVERAGE_RATIO = 8000; // 80% LTV
     uint256 public constant MIN_AMOUNT = 1e18; // 1 token minimum
     
-    // Decoder addresses (to be set after deployment)
-    address public overseerDecoderAndSanitizer;
-    address public felixDecoderAndSanitizer;
-    address public wHypeDecoderAndSanitizer;
-    address public erc20DecoderAndSanitizer;
+    // Unified decoder address (HyperLiquidDecoder for all operations)
+    address public rawDataDecoderAndSanitizer;
     
     // State tracking for burn operations
     mapping(uint256 => uint256) public burnIdToAmount;
@@ -61,10 +52,10 @@ contract WstHypeLoopingUManager {
     // =============================== CONSTRUCTOR ===============================
     
     constructor(
-        address _vault,
+        address _owner,
         address _manager,
+        address _boringVault,
         address _wHYPE,
-        address _strategist, 
         address _stHYPE,
         address _wstHYPE,
         address _overseer,
@@ -72,14 +63,10 @@ contract WstHypeLoopingUManager {
         address _felixOracle,
         address _felixIrm,
         uint256 _felixLltv
-    ) {
-        vault = BoringVault(payable(_vault));
-        manager = ManagerWithMerkleVerification(_manager);
+    ) UManager(_owner, _manager, _boringVault) {
         wHYPE = _wHYPE;
         stHYPE = _stHYPE;
         wstHYPE = _wstHYPE;
-        owner = msg.sender;
-        strategist = _strategist;
         overseer = _overseer;
         felixMarkets = _felixMarkets;
         felixOracle = _felixOracle;
@@ -87,26 +74,14 @@ contract WstHypeLoopingUManager {
         felixLltv = _felixLltv;
     }
 
-    modifier onlyStrategist() {
-    if (msg.sender != strategist) revert WstHypeLoopingUManager__Unauthorized();
-    _;
-    }
-
-    modifier onlyOwner() {
-        if (msg.sender != owner) revert WstHypeLoopingUManager__Unauthorized();
-        _;
-    }
+    // Removed custom modifiers - using UManager's requiresAuth and enforceRateLimit
     
     // =============================== DECODER SETTERS ===============================
     
-    function setDecoders(
-        address _hyperliquidDecoder,  // For wHYPE/Overseer/ERC20
-        address _felixDecoder        // For Felix operations
-    ) external onlyOwner {
-        overseerDecoderAndSanitizer = _hyperliquidDecoder;
-        wHypeDecoderAndSanitizer = _hyperliquidDecoder;
-        erc20DecoderAndSanitizer = _hyperliquidDecoder;
-        felixDecoderAndSanitizer = _felixDecoder;
+    function setDecoder(
+        address _hyperliquidDecoder  // Unified decoder for ALL operations (including Felix)
+    ) external requiresAuth {
+        rawDataDecoderAndSanitizer = _hyperliquidDecoder;
     }
     
     // =============================== STRATEGY EXECUTION (DEPOSIT/LOOP) ===============================
@@ -121,7 +96,7 @@ contract WstHypeLoopingUManager {
         uint256 initialAmount,
         uint256 leverageLoops,
         bytes32[][] calldata allProofs
-    ) external onlyStrategist{
+    ) external requiresAuth enforceRateLimit {
         require(initialAmount >= MIN_AMOUNT, "Amount too small");
         require(leverageLoops > 0 && leverageLoops <= MAX_LEVERAGE_LOOPS, "Invalid leverage loops");
         
@@ -183,15 +158,15 @@ contract WstHypeLoopingUManager {
             targets[opIndex] = wHYPE;
             calldatas[opIndex] = abi.encodeCall(IWHype.withdraw, (currentAmount));
             values[opIndex] = 0;
-            decoders[opIndex] = wHypeDecoderAndSanitizer;
+            decoders[opIndex] = rawDataDecoderAndSanitizer;
             opIndex++;
             
             // 2. Mint stHYPE by sending HYPE to Overseer
             proofs[opIndex] = allProofs[opIndex];
             targets[opIndex] = overseer;
-            calldatas[opIndex] = abi.encodeCall(IOverseer.mint, (address(vault)));
+            calldatas[opIndex] = abi.encodeCall(IOverseer.mint, (address(boringVault)));
             values[opIndex] = currentAmount; // HYPE value (native token)
-            decoders[opIndex] = overseerDecoderAndSanitizer;
+            decoders[opIndex] = rawDataDecoderAndSanitizer;
             opIndex++;
             
             // 3. Approve wstHYPE to Felix
@@ -199,24 +174,24 @@ contract WstHypeLoopingUManager {
             targets[opIndex] = wstHYPE;
             calldatas[opIndex] = abi.encodeCall(IERC20.approve, (felixMarkets, currentAmount));
             values[opIndex] = 0;
-            decoders[opIndex] = erc20DecoderAndSanitizer;
+            decoders[opIndex] = rawDataDecoderAndSanitizer;
             opIndex++;
             
             // 4. Supply wstHYPE as collateral to Felix
             proofs[opIndex] = allProofs[opIndex];
             targets[opIndex] = felixMarkets;
-            calldatas[opIndex] = abi.encodeCall(IFelix.supplyCollateral, (_getMarketParams(), currentAmount, address(vault), ""));
+            calldatas[opIndex] = abi.encodeCall(IFelix.supplyCollateral, (_getMarketParams(), currentAmount, address(boringVault), ""));
             values[opIndex] = 0;
-            decoders[opIndex] = felixDecoderAndSanitizer;
+            decoders[opIndex] = rawDataDecoderAndSanitizer;
             opIndex++;
             
             // 5. Borrow wHYPE from Felix
             uint256 borrowAmount = currentAmount * LEVERAGE_RATIO / 10000;
             proofs[opIndex] = allProofs[opIndex];
             targets[opIndex] = felixMarkets;
-            calldatas[opIndex] = abi.encodeCall(IFelix.borrow, (_getMarketParams(), borrowAmount, 0, address(vault), address(vault)));
+            calldatas[opIndex] = abi.encodeCall(IFelix.borrow, (_getMarketParams(), borrowAmount, 0, address(boringVault), address(boringVault)));
             values[opIndex] = 0;
-            decoders[opIndex] = felixDecoderAndSanitizer;
+            decoders[opIndex] = rawDataDecoderAndSanitizer;
             opIndex++;
             
             // Update amount for next loop
@@ -236,7 +211,7 @@ contract WstHypeLoopingUManager {
     function unwindPositions(
         uint256 targetAmount,
         bytes32[][] calldata allProofs
-    ) external onlyStrategist{
+    ) external requiresAuth enforceRateLimit {
         require(targetAmount >= MIN_AMOUNT, "Amount too small");
         
         // Prepare all unwinding operations for batched execution
@@ -291,23 +266,23 @@ contract WstHypeLoopingUManager {
         targets[opIndex] = wHYPE;
         calldatas[opIndex] = abi.encodeCall(IERC20.approve, (felixMarkets, targetAmount));
         values[opIndex] = 0;
-        decoders[opIndex] = erc20DecoderAndSanitizer;
+        decoders[opIndex] = rawDataDecoderAndSanitizer;
         opIndex++;
         
         // 2. Repay loan
         proofs[opIndex] = allProofs[opIndex];
         targets[opIndex] = felixMarkets;
-        calldatas[opIndex] = abi.encodeCall(IFelix.repay, (_getMarketParams(), targetAmount, 0, address(vault), ""));
+        calldatas[opIndex] = abi.encodeCall(IFelix.repay, (_getMarketParams(), targetAmount, 0, address(boringVault), ""));
         values[opIndex] = 0;
-        decoders[opIndex] = felixDecoderAndSanitizer;
+        decoders[opIndex] = rawDataDecoderAndSanitizer;
         opIndex++;
         
         // 3. Withdraw collateral (wstHYPE)
         proofs[opIndex] = allProofs[opIndex];
         targets[opIndex] = felixMarkets;
-        calldatas[opIndex] = abi.encodeCall(IFelix.withdrawCollateral, (_getMarketParams(), targetAmount, address(vault), address(vault)));
+        calldatas[opIndex] = abi.encodeCall(IFelix.withdrawCollateral, (_getMarketParams(), targetAmount, address(boringVault), address(boringVault)));
         values[opIndex] = 0;
-        decoders[opIndex] = felixDecoderAndSanitizer;
+        decoders[opIndex] = rawDataDecoderAndSanitizer;
         opIndex++;
         
         // 4. Approve stHYPE for burning
@@ -315,15 +290,15 @@ contract WstHypeLoopingUManager {
         targets[opIndex] = stHYPE;
         calldatas[opIndex] = abi.encodeCall(IERC20.approve, (overseer, targetAmount));
         values[opIndex] = 0;
-        decoders[opIndex] = erc20DecoderAndSanitizer;
+        decoders[opIndex] = rawDataDecoderAndSanitizer;
         opIndex++;
         
         // 5. Burn stHYPE and redeem if possible, then wrap HYPE to wHYPE
         proofs[opIndex] = allProofs[opIndex];
         targets[opIndex] = overseer;
-        calldatas[opIndex] = abi.encodeCall(IOverseer.burnAndRedeemIfPossible, (address(vault), targetAmount, ""));
+        calldatas[opIndex] = abi.encodeCall(IOverseer.burnAndRedeemIfPossible, (address(boringVault), targetAmount, ""));
         values[opIndex] = 0;
-        decoders[opIndex] = overseerDecoderAndSanitizer;
+        decoders[opIndex] = rawDataDecoderAndSanitizer;
         opIndex++;
         
         return (proofs, targets, calldatas, values, decoders);
@@ -335,7 +310,7 @@ contract WstHypeLoopingUManager {
     function wrapHypeToWHype(
         uint256 amount,
         bytes32[] calldata proof
-    ) external {
+    ) external requiresAuth enforceRateLimit {
         bytes32[][] memory proofs = new bytes32[][](1);
         address[] memory targets = new address[](1);
         bytes[] memory calldatas = new bytes[](1);
@@ -346,7 +321,7 @@ contract WstHypeLoopingUManager {
         targets[0] = wHYPE;
         calldatas[0] = abi.encodeCall(IWHype.deposit, ());
         values[0] = amount;
-        decoders[0] = wHypeDecoderAndSanitizer;
+        decoders[0] = rawDataDecoderAndSanitizer;
         
         try manager.manageVaultWithMerkleVerification(
             proofs,
@@ -371,7 +346,7 @@ contract WstHypeLoopingUManager {
     function completeBurnRedemptions(
         uint256[] calldata burnIds,
         bytes32[][] calldata allProofs
-    ) external onlyStrategist{
+    ) external requiresAuth enforceRateLimit {
         require(burnIds.length == allProofs.length, "Mismatched arrays");
         
         bytes32[][] memory proofs = new bytes32[][](burnIds.length);
@@ -388,7 +363,7 @@ contract WstHypeLoopingUManager {
             targets[i] = overseer;
             calldatas[i] = abi.encodeCall(IOverseer.redeem, (burnIds[i]));
             values[i] = 0;
-            decoders[i] = overseerDecoderAndSanitizer;
+            decoders[i] = rawDataDecoderAndSanitizer;
         }
         
         // Execute all redemptions in a single batch call
@@ -430,8 +405,8 @@ contract WstHypeLoopingUManager {
         uint256 totalStHypeBalance,
         uint256 maxRedeemableFromOverseer
     ) {
-        totalWHypeBalance = IERC20(wHYPE).balanceOf(address(vault));
-        totalStHypeBalance = IERC20(stHYPE).balanceOf(address(vault));
+        totalWHypeBalance = IERC20(wHYPE).balanceOf(address(boringVault));
+        totalStHypeBalance = IERC20(stHYPE).balanceOf(address(boringVault));
         maxRedeemableFromOverseer = IOverseer(overseer).maxRedeemable();
     }
 
@@ -445,27 +420,11 @@ contract WstHypeLoopingUManager {
             lltv: felixLltv
         });
     }
-    function transferOwnership(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "Invalid owner");
-        owner = newOwner;
-    }
-
-    function setStrategist(address newStrategist) external onlyOwner {
-        require(newStrategist != address(0), "Invalid strategist");
-        strategist = newStrategist;
-    }
+    // Ownership and strategist management now handled by UManager's Auth system
 
 }
 
 // =============================== INTERFACES ===============================
-
-struct MarketParams {
-    address loanToken;
-    address collateralToken;
-    address oracle;
-    address irm;
-    uint256 lltv;
-}
 
 interface IOverseer {
     function mint(address to) external payable returns (uint256);
