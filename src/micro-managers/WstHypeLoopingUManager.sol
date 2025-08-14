@@ -250,7 +250,7 @@ contract WstHypeLoopingUManager is UManager {
         uint256[] memory values,
         address[] memory decoders
     ) {
-        uint256 totalOps = 5; // Simplified unwinding operations
+        uint256 totalOps = 6; // Complete unwinding operations (including wHYPE deposit)
         require(allProofs.length >= totalOps, "Insufficient proofs for unwinding");
         
         proofs = new bytes32[][](totalOps);
@@ -293,11 +293,19 @@ contract WstHypeLoopingUManager is UManager {
         decoders[opIndex] = rawDataDecoderAndSanitizer;
         opIndex++;
         
-        // 5. Burn stHYPE and redeem if possible, then wrap HYPE to wHYPE
+        // 5. Burn stHYPE and redeem if possible (direct burn without community code)
         proofs[opIndex] = allProofs[opIndex];
         targets[opIndex] = overseer;
-        calldatas[opIndex] = abi.encodeCall(IOverseer.burnAndRedeemIfPossible, (address(boringVault), targetAmount, ""));
+        calldatas[opIndex] = abi.encodeCall(IOverseer.burnAndRedeemIfPossible, (address(boringVault), targetAmount));
         values[opIndex] = 0;
+        decoders[opIndex] = rawDataDecoderAndSanitizer;
+        opIndex++;
+        
+        // 6. Wrap HYPE to wHYPE (final step to complete unwinding)
+        proofs[opIndex] = allProofs[opIndex];
+        targets[opIndex] = wHYPE;
+        calldatas[opIndex] = abi.encodeCall(IWHype.deposit, ());
+        values[opIndex] = targetAmount; // Use native HYPE value from burn
         decoders[opIndex] = rawDataDecoderAndSanitizer;
         opIndex++;
         
@@ -428,7 +436,7 @@ contract WstHypeLoopingUManager is UManager {
 
 interface IOverseer {
     function mint(address to) external payable returns (uint256);
-    function burnAndRedeemIfPossible(address to, uint256 amount, string calldata communityCode) external returns (uint256);
+    function burnAndRedeemIfPossible(address to, uint256 amount) external returns (uint256);
     function redeem(uint256 burnId) external;
     function maxRedeemable() external view returns (uint256);
     function redeemable(uint256 burnId) external view returns (bool);
