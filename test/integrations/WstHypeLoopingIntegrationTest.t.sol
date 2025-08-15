@@ -137,6 +137,20 @@ contract WstHypeLoopingIntegrationTest is Test, MerkleTreeHelper {
             address(0) // No balancer vault needed
         );
         
+        // Deploy AccountantWithRateProviders (needed for strategy manager)
+        accountant = new AccountantWithRateProviders(
+            address(this),      // owner
+            address(boringVault), // vault
+            address(this),      // payoutAddress
+            1e18,              // startingExchangeRate (1:1)
+            wHYPE,             // base asset (wHYPE)
+            10500,             // allowedExchangeRateChangeUpper (5% increase)
+            9500,              // allowedExchangeRateChangeLower (5% decrease)
+            24 hours,          // minimumUpdateDelayInSeconds
+            50,                // platformFee (0.5%)
+            1000               // performanceFee (10%)
+        );
+        
         // Deploy unified decoder for ALL operations
         hyperliquidDecoder = new HyperliquidDecoderAndSanitizer();
         rawDataDecoderAndSanitizer = address(hyperliquidDecoder);
@@ -146,6 +160,7 @@ contract WstHypeLoopingIntegrationTest is Test, MerkleTreeHelper {
             address(this),      // owner
             address(manager),   // manager
             address(boringVault), // boringVault
+            address(accountant), // accountant (for rate provider access)
             wHYPE,
             stHYPE,
             wstHYPE,
@@ -172,6 +187,7 @@ contract WstHypeLoopingIntegrationTest is Test, MerkleTreeHelper {
         // Set authorities
         boringVault.setAuthority(rolesAuthority);
         manager.setAuthority(rolesAuthority);
+        accountant.setAuthority(rolesAuthority);
         strategyManager.setAuthority(rolesAuthority);
         
         // Setup BoringVault role capabilities

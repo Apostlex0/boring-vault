@@ -11,6 +11,21 @@ interface IFelix {
         uint256 lltv;
     }
 
+    struct Position {
+        uint256 supplyShares;
+        uint128 borrowShares;
+        uint128 collateral;
+    }
+
+    struct Market {
+        uint128 totalSupplyAssets;
+        uint128 totalSupplyShares;
+        uint128 totalBorrowAssets;
+        uint128 totalBorrowShares;
+        uint128 lastUpdate;
+        uint128 fee;
+    }
+
     function supplyCollateral(
         MarketParams memory marketParams,
         uint256 assets,
@@ -40,6 +55,13 @@ interface IFelix {
         address onBehalf,
         address receiver
     ) external;
+
+    // Query functions for debt calculation
+    function position(bytes32 id, address user) external view returns (uint256 supplyShares, uint128 borrowShares, uint128 collateral);
+    
+    function market(bytes32 id) external view returns (uint128 totalSupplyAssets, uint128 totalSupplyShares, uint128 totalBorrowAssets, uint128 totalBorrowShares, uint128 lastUpdate, uint128 fee);
+    
+    function accrueInterest(MarketParams memory marketParams) external;
 }
 
 // ========== OVERSEER Interface ==========
