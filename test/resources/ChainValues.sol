@@ -1,4 +1,4 @@
-pragma solidity 0.8.21;
+pragma solidity ^0.8.21;
 
 import {ERC20} from "@solmate/tokens/ERC20.sol";
 import {AddressToBytes32Lib} from "src/helper/AddressToBytes32Lib.sol";
@@ -2725,12 +2725,11 @@ contract ChainValues {
         values[hyperliquid]["overseer"] = 0xB96f07367e69e86d6e9C3F29215885104813eeAE.toBytes32(); // Staking contract
         
         // Felix (Morpho) Protocol
-        values[hyperliquid]["Felix_Vanilla"] = 0x68e37dE8d93d3496ae143F2E900490f6280C57cD.toBytes32(); // Felix Markets
+        values[hyperliquid]["felixMarkets"] = 0x68e37dE8d93d3496ae143F2E900490f6280C57cD.toBytes32(); // Felix Markets
         values[hyperliquid]["felixOracle"] = 0xD767818Ef397e597810cF2Af6b440B1b66f0efD3.toBytes32();
         values[hyperliquid]["felixIrm"] = 0xD4a426F010986dCad727e8dd6eed44cA4A9b7483.toBytes32();
         
-        // Decoders and Sanitizers (will be set by integration test)
-        values[hyperliquid]["hyperliquidDecoderAndSanitizer"] = address(0).toBytes32(); // To be set
+        // Decoders and Sanitizers (will be set by deployment )
         values[hyperliquid]["rawDataDecoderAndSanitizer"] = address(0).toBytes32(); // To be set
     }
 }

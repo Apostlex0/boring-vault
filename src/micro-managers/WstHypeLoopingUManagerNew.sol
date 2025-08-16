@@ -12,8 +12,6 @@ import {BoringVault} from "src/base/BoringVault.sol";
 import {IFelix, IOverseer, IstHYPE, IwstHYPE, IWHYPE} from "src/interfaces/Hyperliquidinterfaces.sol";
 
 /**
- * @title WstHypeLoopingUManagerNew
- * @notice Strategy contract for wstHYPE looping with Felix Vanilla leverage
  * @dev Executes: wHYPE -> HYPE -> stHYPE -> Felix supply wstHYPE -> Felix borrow wHYPE -> repeat
  *      Also handles unwinding for withdrawals: repay loans -> withdraw collateral -> unstake -> return wHYPE
  */
