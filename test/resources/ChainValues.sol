@@ -38,6 +38,7 @@ contract ChainValues {
     string public constant flare = "flare";
     string public constant plume = "plume";
     string public constant katana = "katana";
+    string public constant hyperliquid = "hyperliquid";
 
     // Bridging constants.
     uint64 public constant ccipArbitrumChainSelector = 4949039107694359620;
@@ -128,6 +129,7 @@ contract ChainValues {
         _addAvalancheValues(); 
         _addPlumeValues();
         _addKatanaValues();
+        _addHyperliquidValues();
         // Add testnet values
         _addHoleskyValues();
         _addSepoliaValues();
@@ -2710,5 +2712,25 @@ contract ChainValues {
         // LayerZero
         values[katana]["LayerZeroEndPoint"] = 0x6F475642a6e85809B1c36Fa62763669b1b48DD5B.toBytes32();
 
+    }
+
+    function _addHyperliquidValues() private {
+        // Hyperliquid Protocol Tokens
+        values[hyperliquid]["wHYPE"] = 0x5555555555555555555555555555555555555555.toBytes32();
+        values[hyperliquid]["stHYPE"] = 0xfFaa4a3D97fE9107Cef8a3F48c069F577Ff76cC1.toBytes32();
+        values[hyperliquid]["wstHYPE"] = 0x94e8396e0869c9F2200760aF0621aFd240E1CF38.toBytes32();
+        values[hyperliquid]["HYPE"] = 0x2222222222222222222222222222222222222222.toBytes32(); // Native token
+        
+        // Hyperliquid Protocol Contracts
+        values[hyperliquid]["overseer"] = 0xB96f07367e69e86d6e9C3F29215885104813eeAE.toBytes32(); // Staking contract
+        
+        // Felix (Morpho) Protocol
+        values[hyperliquid]["Felix_Vanilla"] = 0x68e37dE8d93d3496ae143F2E900490f6280C57cD.toBytes32(); // Felix Markets
+        values[hyperliquid]["felixOracle"] = 0xD767818Ef397e597810cF2Af6b440B1b66f0efD3.toBytes32();
+        values[hyperliquid]["felixIrm"] = 0xD4a426F010986dCad727e8dd6eed44cA4A9b7483.toBytes32();
+        
+        // Decoders and Sanitizers (will be set by integration test)
+        values[hyperliquid]["hyperliquidDecoderAndSanitizer"] = address(0).toBytes32(); // To be set
+        values[hyperliquid]["rawDataDecoderAndSanitizer"] = address(0).toBytes32(); // To be set
     }
 }
