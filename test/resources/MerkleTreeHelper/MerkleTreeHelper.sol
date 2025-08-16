@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.21;
+pragma solidity ^0.8.21;
 
 import {ERC20} from "@solmate/tokens/ERC20.sol";
 import {AddressToBytes32Lib} from "src/helper/AddressToBytes32Lib.sol";
@@ -13818,7 +13818,191 @@ contract MerkleTreeHelper is CommonBase, ChainValues, Test {
             currentIndex = currentIndex / 2; // Move to parent index in next layer
         }
     }
+
+    // ========================================= WstHYPE Looping =========================================
+
+    /**
+     * @notice Add all WstHYPE looping strategy operation leafs
+     * @dev Creates leafs for: wHYPE operations, stHYPE/overseer operations, Felix lending operations
+     * @param leafs Array to add the leafs to
+     */
+    function _addWstHypeLoopingLeafs(ManageLeaf[] memory leafs) internal {
+        address wHYPE = getAddress(sourceChain, "wHYPE");
+        address stHYPE = getAddress(sourceChain, "stHYPE");
+        address wstHYPE = getAddress(sourceChain, "wstHYPE");
+        address overseer = getAddress(sourceChain, "overseer");
+        address felixMarkets = getAddress(sourceChain, "felixMarkets");
+        address felixOracle = getAddress(sourceChain, "felixOracle");
+        address felixIrm = getAddress(sourceChain, "felixIrm");
+        address boringVault = getAddress(sourceChain, "boringVault");
+        address decoder = getAddress(sourceChain, "rawDataDecoderAndSanitizer");
+        
+        // ========== LOOPING OPERATIONS ==========
+        
+        // 0. wHYPE withdraw (unwrap to HYPE)
+        unchecked { leafIndex++; }
+        leafs[leafIndex] = ManageLeaf({
+            target: wHYPE,
+            canSendValue: false,
+            signature: "withdraw(uint256)",
+            argumentAddresses: new address[](0),
+            description: "Withdraw wHYPE to get HYPE",
+            decoderAndSanitizer: decoder
+        });
+        
+        // 1. Overseer mint (HYPE -> stHYPE) - direct mint without community code
+        unchecked { leafIndex++; }
+        leafs[leafIndex] = ManageLeaf({
+            target: overseer,
+            canSendValue: true,  // canSendValue = true for native HYPE
+            signature: "mint(address)",
+            argumentAddresses: new address[](1),
+            description: "Mint stHYPE from overseer",
+            decoderAndSanitizer: decoder
+        });
+        leafs[leafIndex].argumentAddresses[0] = boringVault;
+        
+        // 2. wstHYPE approve Felix
+        unchecked { leafIndex++; }
+        leafs[leafIndex] = ManageLeaf({
+            target: wstHYPE,
+            canSendValue: false,
+            signature: "approve(address,uint256)",
+            argumentAddresses: new address[](1),
+            description: "Approve Felix to spend wstHYPE",
+            decoderAndSanitizer: decoder
+        });
+        leafs[leafIndex].argumentAddresses[0] = felixMarkets;
+        
+        // 3. Felix supply collateral (wstHYPE)
+        unchecked { leafIndex++; }
+        leafs[leafIndex] = ManageLeaf({
+            target: felixMarkets,
+            canSendValue: false,
+            signature: "supplyCollateral((address,address,address,address,uint256),uint256,address,bytes)",
+            argumentAddresses: new address[](5),
+            description: "Felix supply collateral",
+            decoderAndSanitizer: decoder
+        });
+        leafs[leafIndex].argumentAddresses[0] = wHYPE;      // loanToken
+        leafs[leafIndex].argumentAddresses[1] = wstHYPE;    // collateralToken
+        leafs[leafIndex].argumentAddresses[2] = felixOracle; // oracle
+        leafs[leafIndex].argumentAddresses[3] = felixIrm;    // irm
+        leafs[leafIndex].argumentAddresses[4] = boringVault; // onBehalf
+        
+        // 4. Felix borrow (wHYPE)
+        unchecked { leafIndex++; }
+        leafs[leafIndex] = ManageLeaf({
+            target: felixMarkets,
+            canSendValue: false,
+            signature: "borrow((address,address,address,address,uint256),uint256,uint256,address,address)",
+            argumentAddresses: new address[](6),
+            description: "Felix borrow wHYPE",
+            decoderAndSanitizer: decoder
+        });
+        leafs[leafIndex].argumentAddresses[0] = wHYPE;      // loanToken
+        leafs[leafIndex].argumentAddresses[1] = wstHYPE;    // collateralToken
+        leafs[leafIndex].argumentAddresses[2] = felixOracle; // oracle
+        leafs[leafIndex].argumentAddresses[3] = felixIrm;    // irm
+        leafs[leafIndex].argumentAddresses[4] = boringVault; // onBehalf
+        leafs[leafIndex].argumentAddresses[5] = boringVault; // receiver
+        
+        // ========== UNWINDING OPERATIONS ==========
+        
+        // 5. wHYPE approve Felix (for repayment)
+        unchecked { leafIndex++; }
+        leafs[leafIndex] = ManageLeaf({
+            target: wHYPE,
+            canSendValue: false,
+            signature: "approve(address,uint256)",
+            argumentAddresses: new address[](1),
+            description: "Approve wHYPE for Felix repayment",
+            decoderAndSanitizer: decoder
+        });
+        leafs[leafIndex].argumentAddresses[0] = felixMarkets;
+        
+        // 6. Felix repay (wHYPE)
+        unchecked { leafIndex++; }
+        leafs[leafIndex] = ManageLeaf({
+            target: felixMarkets,
+            canSendValue: false,
+            signature: "repay((address,address,address,address,uint256),uint256,uint256,address,bytes)",
+            argumentAddresses: new address[](5),
+            description: "Felix repay wHYPE loan",
+            decoderAndSanitizer: decoder
+        });
+        leafs[leafIndex].argumentAddresses[0] = wHYPE;      // loanToken
+        leafs[leafIndex].argumentAddresses[1] = wstHYPE;    // collateralToken
+        leafs[leafIndex].argumentAddresses[2] = felixOracle; // oracle
+        leafs[leafIndex].argumentAddresses[3] = felixIrm;    // irm
+        leafs[leafIndex].argumentAddresses[4] = boringVault; // onBehalf
+        
+        // 7. Felix withdraw collateral (wstHYPE)
+        unchecked { leafIndex++; }
+        leafs[leafIndex] = ManageLeaf({
+            target: felixMarkets,
+            canSendValue: false,
+            signature: "withdrawCollateral((address,address,address,address,uint256),uint256,address,address)",
+            argumentAddresses: new address[](6),
+            description: "Felix withdraw wstHYPE collateral",
+            decoderAndSanitizer: decoder
+        });
+        leafs[leafIndex].argumentAddresses[0] = wHYPE;      // loanToken
+        leafs[leafIndex].argumentAddresses[1] = wstHYPE;    // collateralToken
+        leafs[leafIndex].argumentAddresses[2] = felixOracle; // oracle
+        leafs[leafIndex].argumentAddresses[3] = felixIrm;    // irm
+        leafs[leafIndex].argumentAddresses[4] = boringVault; // onBehalf
+        leafs[leafIndex].argumentAddresses[5] = boringVault; // receiver
+        
+        // 8. stHYPE approve overseer (for burn)
+        unchecked { leafIndex++; }
+        leafs[leafIndex] = ManageLeaf({
+            target: stHYPE,
+            canSendValue: false,
+            signature: "approve(address,uint256)",
+            argumentAddresses: new address[](1),
+            description: "Approve stHYPE for Overseer burn",
+            decoderAndSanitizer: decoder
+        });
+        leafs[leafIndex].argumentAddresses[0] = overseer;
+        
+        // 9. Overseer burn and redeem if possible (stHYPE -> HYPE)
+        unchecked { leafIndex++; }
+        leafs[leafIndex] = ManageLeaf({
+            target: overseer,
+            canSendValue: false,
+            signature: "burnAndRedeemIfPossible(address,uint256,string)",
+            argumentAddresses: new address[](1),
+            description: "Burn stHYPE and redeem HYPE",
+            decoderAndSanitizer: decoder
+        });
+        leafs[leafIndex].argumentAddresses[0] = boringVault;
+        
+        // 10. wHYPE deposit (HYPE -> wHYPE)
+        unchecked { leafIndex++; }
+        leafs[leafIndex] = ManageLeaf({
+            target: wHYPE,
+            canSendValue: true,  // canSendValue = true for native HYPE deposit
+            signature: "deposit()",
+            argumentAddresses: new address[](0),
+            description: "Deposit HYPE to get wHYPE",
+            decoderAndSanitizer: decoder
+        });
+        
+        // 11. Overseer redeem (complete burn redemption)
+        unchecked { leafIndex++; }
+        leafs[leafIndex] = ManageLeaf({
+            target: overseer,
+            canSendValue: false,
+            signature: "redeem(uint256)",
+            argumentAddresses: new address[](0),
+            description: "Redeem completed burn request",
+            decoderAndSanitizer: decoder
+        });
+    }
 }
+
+
 
 interface IMB {
     struct MarketParams {
