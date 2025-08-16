@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.21;
+pragma solidity ^0.8.21;
 
 import {FixedPointMathLib} from "@solmate/utils/FixedPointMathLib.sol";
 import {UManager} from "src/micro-managers/UManager.sol";
@@ -153,21 +153,11 @@ contract WstHypeLoopingUManagerNew is UManager {
             revert WstHypeLoopingUManager__DecoderNotSet();
         }
         
-        // Check if vault has sufficient wHYPE balance
-        uint256 vaultBalance = ERC20(wHYPE).balanceOf(boringVault);
-        if (vaultBalance < initialAmount) {
-            revert WstHypeLoopingUManager__InsufficientBalance(initialAmount, vaultBalance);
-        }
-        
         // Calculate total number of operations needed (5 operations per loop)
         uint256 totalOperations = leverageLoops * 5;
         if (allProofs.length < totalOperations) {
             revert WstHypeLoopingUManager__InsufficientProofs(totalOperations, allProofs.length);
         }
-        
-        // Store initial values for event emission
-        uint256 initialCollateral = totalCollateralSupplied;
-        uint256 initialDebt = totalDebtBorrowed;
         
         // Prepare all operations for batched execution
         (
