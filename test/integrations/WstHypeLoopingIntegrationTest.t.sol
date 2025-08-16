@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.21;
+pragma solidity ^0.8.21;
 
 import {Test, stdStorage, StdStorage, stdError, console} from "@forge-std/Test.sol";
 import {SafeTransferLib} from "@solmate/utils/SafeTransferLib.sol";
@@ -115,15 +115,6 @@ contract WstHypeLoopingIntegrationTest is Test, MerkleTreeHelper {
         wstHYPE = address(mockWstHYPE);
         overseer = address(mockOverseer);
         felixMarkets = address(mockFelix);
-        
-        // Set addresses in ChainValues for MerkleTreeHelper
-        setAddress(true, "hyperliquid", "wHYPE", wHYPE);
-        setAddress(true, "hyperliquid", "stHYPE", stHYPE);
-        setAddress(true, "hyperliquid", "wstHYPE", wstHYPE);
-        setAddress(true, "hyperliquid", "overseer", overseer);
-        setAddress(true, "hyperliquid", "felixMarkets", felixMarkets);
-        setAddress(true, "hyperliquid", "felixOracle", felixOracle);
-        setAddress(true, "hyperliquid", "felixIrm", felixIrm);
     }
 
     function _deployCoreSystem() internal {
@@ -173,11 +164,6 @@ contract WstHypeLoopingIntegrationTest is Test, MerkleTreeHelper {
         
         // Set decoder in strategy manager
         strategyManager.setDecoder(rawDataDecoderAndSanitizer);
-        
-        // Set addresses in ChainValues for MerkleTreeHelper
-        setAddress(true, "hyperliquid", "boringVault", address(boringVault));
-        setAddress(true, "hyperliquid", "manager", address(manager));
-        setAddress(true, "hyperliquid", "rawDataDecoderAndSanitizer", rawDataDecoderAndSanitizer);
     }
 
     function _setupRoles() internal {
