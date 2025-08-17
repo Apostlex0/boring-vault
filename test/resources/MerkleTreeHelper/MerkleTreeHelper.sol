@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.21;
+pragma solidity ^0.8.21;
 
 import {ERC20} from "@solmate/tokens/ERC20.sol";
 import {AddressToBytes32Lib} from "src/helper/AddressToBytes32Lib.sol";
@@ -13700,8 +13700,14 @@ contract MerkleTreeHelper is CommonBase, ChainValues, Test {
         merkleTreeOut[merkleTreeIn_length] = new bytes32[](next_layer_length);
         uint256 count;
         for (uint256 i; i < layer_length; i += 2) {
-            merkleTreeOut[merkleTreeIn_length][count] =
-                _hashPair(merkleTreeIn[merkleTreeIn_length - 1][i], merkleTreeIn[merkleTreeIn_length - 1][i + 1]);
+            if (i + 1 < layer_length) {
+                // Normal case: hash pair of elements
+                merkleTreeOut[merkleTreeIn_length][count] =
+                    _hashPair(merkleTreeIn[merkleTreeIn_length - 1][i], merkleTreeIn[merkleTreeIn_length - 1][i + 1]);
+            } else {
+                // Odd case: duplicate the last element to create a pair
+                merkleTreeOut[merkleTreeIn_length][count] = _hashPair(merkleTreeIn[merkleTreeIn_length - 1][i], merkleTreeIn[merkleTreeIn_length - 1][i]);
+            }
             count++;
         }
 
@@ -13775,21 +13781,42 @@ contract MerkleTreeHelper is CommonBase, ChainValues, Test {
         uint256 tree_length = tree.length;
         proof = new bytes32[](tree_length - 1);
 
-        // Build the proof
-        for (uint256 i; i < tree_length - 1; ++i) {
-            // For each layer we need to find the leaf.
-            for (uint256 j; j < tree[i].length; ++j) {
-                if (leaf == tree[i][j]) {
-                    // We have found the leaf, so now figure out if the proof needs the next leaf or the previous one.
-                    proof[i] = j % 2 == 0 ? tree[i][j + 1] : tree[i][j - 1];
-                    leaf = _hashPair(leaf, proof[i]);
-                    break;
-                } else if (j == tree[i].length - 1) {
-                    // We have reached the end of the layer and have not found the leaf.
-                    revert("Leaf not found in tree");
-                }
+        // Find the leaf in the bottom layer first
+        uint256 leafIndex = type(uint256).max;
+        for (uint256 j; j < tree[0].length; ++j) {
+            if (leaf == tree[0][j]) {
+                leafIndex = j;
+                break;
             }
         }
+        if (leafIndex == type(uint256).max) {
+            revert("Leaf not found in tree");
+        }
+
+        // Build the proof by tracking position through layers
+        uint256 currentIndex = leafIndex;
+        bytes32 currentHash = leaf;
+
+        for (uint256 i; i < tree_length - 1; ++i) {
+            // Determine sibling index
+            uint256 siblingIndex;
+            if (currentIndex % 2 == 0) {
+                // Current is left child, sibling is right
+                siblingIndex = currentIndex + 1;
+                if (siblingIndex >= tree[i].length) {
+                    // No right sibling exists, use current node (duplicate case)
+                    siblingIndex = currentIndex;
+                }
+            } else {
+                // Current is right child, sibling is left
+                siblingIndex = currentIndex - 1;
+            }
+
+            proof[i] = tree[i][siblingIndex];
+            currentHash = _hashPair(currentHash, proof[i]);
+            currentIndex = currentIndex / 2; // Move to parent index in next layer
+        }
+    }
     }
 }
 
