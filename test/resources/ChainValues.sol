@@ -2731,5 +2731,9 @@ contract ChainValues {
         
         // Decoders and Sanitizers (will be set by deployment )
         values[hyperliquid]["rawDataDecoderAndSanitizer"] = address(0).toBytes32(); // To be set
+        values[hyperliquid]["managerAddress"] = address(0).toBytes32(); // To be set
+        values[hyperliquid]["boringVault"] = address(0).toBytes32(); // To be set
+        values[hyperliquid]["accountantAddress"] = address(0).toBytes32();
+        
     }
 }
