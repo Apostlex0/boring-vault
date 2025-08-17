@@ -298,15 +298,6 @@ cast call $FELIX_MARKETS "position(bytes32,address)" $MARKET_ID $BORING_VAULT
 cast call $WHYPE_ADDRESS "balanceOf(address)" $BORING_VAULT
 ```
 
-### Emergency Operations
-```bash
-# Pause strategy (ADMIN_ROLE)
-cast send $STRATEGY_MANAGER "pauseStrategy()" --private-key $ADMIN_PRIVATE_KEY
-
-# Resume strategy (ADMIN_ROLE)
-cast send $STRATEGY_MANAGER "resumeStrategy(address)" $NEW_DECODER --private-key $ADMIN_PRIVATE_KEY
-```
-
 ## Security Considerations
 
 ### Access Control
