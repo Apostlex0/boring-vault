@@ -9,7 +9,6 @@
 6. [Testing Guide](#testing-guide)
 7. [Operations Guide](#operations-guide)
 8. [Security Considerations](#security-considerations)
-9. [Basic Checks](#Basic-Checks)
 
 ## Overview
 
@@ -198,7 +197,7 @@ forge script script/Deployment_Script/DeployWstHypeLoopingStrategy.s.sol \
 6. **Phase 6**: Configure roles and permissions
 7. **Phase 7**: Generate and set Merkle root
 
-## Testing
+## Testing Guide
 
 ### Test Structure
 - **Integration Tests**: `test/integrations/WstHypeLoopingIntegrationTest.t.sol`
@@ -309,21 +308,5 @@ cast call $WHYPE_ADDRESS "balanceOf(address)" $BORING_VAULT
 ### Emergency Mechanisms
 - Strategy pausing capability
 - Emergency action logging
-
-## Basic Checks
-
-```bash
-# Check contract deployment
-cast code $CONTRACT_ADDRESS --rpc-url $RPC_URL
-
-# Verify Merkle root
-cast call $MANAGER "manageRoot(address)" $ADMIN_ADDRESS --rpc-url $RPC_URL
-
-# Check role assignments
-cast call $ROLES_AUTHORITY "doesUserHaveRole(address,uint8)" $USER_ADDRESS $ROLE_ID --rpc-url $RPC_URL
-
-# Monitor events
-cast logs --address $STRATEGY_MANAGER --rpc-url $RPC_URL
-```
 
 ---
