@@ -642,36 +642,6 @@ contract WstHypeLoopingUManagerNew is UManager {
         return totalDebt;
     }
     
-    // =============================== EMERGENCY FUNCTIONS ===============================
-    
-    /**
-     * @notice Emergency function to pause all operations
-     * @dev Can only be called by auth, sets decoder to zero address
-     */
-    function emergencyPause() external requiresAuth {
-        address oldDecoder = rawDataDecoderAndSanitizer;
-        rawDataDecoderAndSanitizer = address(0);
-        
-        emit DecoderUpdated(oldDecoder, address(0));
-        emit EmergencyActionTaken("EMERGENCY_PAUSE", 0);
-    }
-    
-    /**
-     * @notice Emergency function to resume operations
-     * @dev Can only be called by auth, restores decoder
-     */
-    function emergencyResume(address decoder) external requiresAuth {
-        if (decoder == address(0)) {
-            revert WstHypeLoopingUManager__ZeroAddress();
-        }
-        
-        address oldDecoder = rawDataDecoderAndSanitizer;
-        rawDataDecoderAndSanitizer = decoder;
-        
-        emit DecoderUpdated(oldDecoder, decoder);
-        emit EmergencyActionTaken("EMERGENCY_RESUME", 0);
-    }
-    
     // =============================== CALCULATION HELPERS ===============================
     
     /**

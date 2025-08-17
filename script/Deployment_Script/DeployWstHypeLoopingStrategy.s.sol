@@ -216,7 +216,7 @@ contract DeployWstHypeLoopingStrategy is Script, MerkleTreeHelper {
         manager = new ManagerWithMerkleVerification(
             deployer, // owner
             address(vault), // vault
-            address(0) // balancerVault (not needed for Hyperliquid)
+            address(0) // balancerVault for flash loan mechanism (not needed for Hyperliquid)
         );
 
         console.log("  HyperliquidDecoderAndSanitizer:", address(decoder));
