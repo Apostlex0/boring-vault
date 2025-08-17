@@ -147,7 +147,7 @@ For cases where `burnAndRedeemIfPossible()` cannot immediately redeem:
    - Converts redeemed HYPE to wHYPE
    - Separate function
 
-## Deployment
+## Deployment Guide
 
 ### Environment Setup
 ```bash
@@ -176,15 +176,17 @@ cp .env.example .env
 ```bash
 # Dry run (simulation)
 forge script script/Deployment_Script/DeployWstHypeLoopingStrategy.s.sol \
-    --rpc-url $HYPERLIQUID_RPC_URL \
-    --sender $DEPLOYER_ADDRESS
+    --rpc-url https://rpc.hyperliquid.xyz/evm \
+    --sender 0x6D00e5151e16Bf82fCDa972ccA0BEdD079e1928a \
+    --tc DeployWstHypeLoopingStrategy
 
 # Actual deployment
 forge script script/Deployment_Script/DeployWstHypeLoopingStrategy.s.sol \
     --rpc-url $HYPERLIQUID_RPC_URL \
     --private-key $PRIVATE_KEY \
     --broadcast \
-    --verify
+    --verify \
+    --tc DeployWstHypeLoopingStrategy
 ```
 
 ### Deployment Phases
@@ -195,18 +197,6 @@ forge script script/Deployment_Script/DeployWstHypeLoopingStrategy.s.sol \
 5. **Phase 5**: Deploy Strategy Manager
 6. **Phase 6**: Configure roles and permissions
 7. **Phase 7**: Generate and set Merkle root
-
-### Post-Deployment Verification
-```bash
-# Verify all contracts deployed
-cast call $BORING_VAULT "totalSupply()" --rpc-url $HYPERLIQUID_RPC_URL
-
-# Check Merkle root is set
-cast call $MANAGER "manageRoot(address)" $DEPLOYER_ADDRESS --rpc-url $HYPERLIQUID_RPC_URL
-
-# Verify strategy manager configuration
-cast call $STRATEGY_MANAGER "wHYPE()" --rpc-url $HYPERLIQUID_RPC_URL
-```
 
 ## Testing
 
@@ -318,7 +308,6 @@ cast call $WHYPE_ADDRESS "balanceOf(address)" $BORING_VAULT
 
 ### Emergency Mechanisms
 - Strategy pausing capability
-- Decoder replacement for upgrades
 - Emergency action logging
 
 ## Basic Checks
