@@ -509,6 +509,7 @@ contract DeployWstHypeLoopingStrategy is Script, MerkleTreeHelper {
             STRATEGIST_ROLE,
             true
         );
+        rolesAuthority.setUserRole(address(manager), MANAGER_INTERNAL_ROLE, true);
 
         console.log("Roles and permissions configured");
     }
