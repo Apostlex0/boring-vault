@@ -14,8 +14,6 @@ import {MerkleTreeHelper} from "test/resources/MerkleTreeHelper/MerkleTreeHelper
 
 /**
  * @title WstHYPE Looping Strategy Deployment
- * @notice Clean deployment script built from scratch based on systematic architectural analysis
- * @dev All constructor parameters, role configurations, and function selectors verified against contract code
  */
 
 // Rate Providers
@@ -29,7 +27,6 @@ contract StHypeRateProvider {
     }
 
     function getRate() external view returns (uint256) {
-        // stHYPE is 1:1 with HYPE (liquid staking derivative)
         return 1e18;
     }
 
@@ -299,7 +296,6 @@ contract DeployWstHypeLoopingStrategy is Script, MerkleTreeHelper {
         // ================ VAULT PERMISSIONS ================
 
         // Manager contract can call vault.manage() - BOTH overloads
-        // Single call version: manage(address target, bytes calldata data, uint256 value)
         rolesAuthority.setRoleCapability(
             MANAGER_ROLE,
             address(vault),

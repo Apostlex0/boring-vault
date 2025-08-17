@@ -111,7 +111,7 @@ contract WstHypeLoopingUManagerNew is UManager {
     
     /**
      * @notice Set the unified decoder for all operations
-     * @param _hyperliquidDecoder Unified decoder address for ALL operations (including Felix)
+     * @param _hyperliquidDecoder Unified decoder address for ALL operations
      */
     function setDecoder(address _hyperliquidDecoder) external requiresAuth {
         if (_hyperliquidDecoder == address(0)) {
@@ -129,7 +129,7 @@ contract WstHypeLoopingUManagerNew is UManager {
     /**
      * @notice Execute wstHYPE looping strategy with specified leverage using BATCHED operations
      * @param initialAmount The initial amount of wHYPE to loop
-     * @param leverageLoops Number of leverage loops (max 3)
+     * @param leverageLoops Number of leverage loops (max 3 for now)
      * @param allProofs Array of merkle proofs for ALL operations (batched)
      */
     function executeLoopingStrategy(
@@ -431,6 +431,7 @@ contract WstHypeLoopingUManagerNew is UManager {
     /**
      * @notice Wrap HYPE to wHYPE after unstaking
      * @dev Done separately so it can be batched for multiple unstake operations
+     * kept for when we call completeBurnRedemptions
      */
     function wrapHypeToWHype(
         uint256 amount,
@@ -481,6 +482,8 @@ contract WstHypeLoopingUManagerNew is UManager {
      * @notice Complete pending burn redemptions using BATCHED operations
      * @param burnIds Array of burn IDs to redeem
      * @param allProofs Merkle proofs for redemption operations
+     * Still not sure how to implement this, 
+     * for now i'm just going to call unwinding function with amount less than max-redeemable
      */
     function completeBurnRedemptions(
         uint256[] calldata burnIds,
@@ -579,7 +582,7 @@ contract WstHypeLoopingUManagerNew is UManager {
     }
     
     /**
-     * @notice Emergency function to check vault's health and positions
+     * @notice Function to check vault's health and positions
      * @dev This can be used by external monitoring systems
      */
     function checkVaultHealth() external view returns (
