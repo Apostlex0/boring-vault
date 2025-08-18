@@ -12,11 +12,13 @@
     "test": "node src/test.js"
   },
   "dependencies": {
-    "ethers": "^6.8.0",
+    "commander": "^11.1.0",
     "dotenv": "^16.3.1",
-    "winston": "^3.11.0",
+    "ethers": "^6.8.0",
+    "merkletreejs": "^0.3.11",
     "node-cron": "^3.0.2",
-    "merkletreejs": "^0.3.11"
+    "node-fetch": "^3.3.2",
+    "winston": "^3.11.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

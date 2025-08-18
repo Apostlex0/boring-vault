@@ -34,7 +34,13 @@ const BORING_VAULT_ABI = [
 const ERC20_ABI = [
   "function balanceOf(address account) external view returns (uint256)",
   "function totalSupply() external view returns (uint256)",
-  "function decimals() external view returns (uint8)"
+  "function decimals() external view returns (uint8)",
+  "function approve(address spender, uint256 amount) external returns (bool)"
+];
+
+const TELLER_ABI = [
+  "function deposit(address depositAsset, uint256 depositAmount, uint256 minimumMint) external payable returns (uint256 shares)",
+  "function isPaused() external view returns (bool)"
 ];
 
 const FELIX_ABI = [
@@ -109,6 +115,13 @@ class ContractManager {
       config.contracts.overseer,
       OVERSEER_ABI,
       this.provider
+    );
+
+    // Teller Contract
+    this.teller = new ethers.Contract(
+      config.contracts.teller,
+      TELLER_ABI,
+      this.strategistWallet
     );
   }
 
@@ -277,6 +290,62 @@ class ContractManager {
       return await this.manager.isPaused();
     } catch (error) {
       throw new Error(`Failed to check pause status: ${error.message}`);
+    }
+  }
+
+  // Deposit into vault via Teller
+  async deposit(depositAsset, depositAmount, minimumMint) {
+    try {
+      console.log('Executing vault deposit', {
+        asset: depositAsset,
+        amount: ethers.formatEther(depositAmount),
+        minimumMint: ethers.formatEther(minimumMint)
+      });
+
+      // Check if asset is wHYPE (our base asset)
+      const isWHype = depositAsset.toLowerCase() === config.contracts.wHype.toLowerCase();
+      
+      if (!isWHype) {
+        throw new Error('Only wHYPE deposits are currently supported');
+      }
+
+      // Get wHYPE contract for approval (using strategist wallet)
+      const wHypeContract = new ethers.Contract(
+        config.contracts.wHype,
+        ERC20_ABI,
+        this.strategistWallet
+      );
+
+      // Check user balance
+      const userBalance = await wHypeContract.balanceOf(this.strategistWallet.address);
+      if (userBalance < depositAmount) {
+        throw new Error(`Insufficient wHYPE balance. Required: ${ethers.formatEther(depositAmount)}, Available: ${ethers.formatEther(userBalance)}`);
+      }
+
+      // Approve teller to spend wHYPE
+      console.log('Approving wHYPE spend for teller');
+      const approveTx = await wHypeContract.approve(config.contracts.boringVault, depositAmount);
+      await approveTx.wait();
+      console.log('wHYPE approval confirmed');
+
+      // Execute deposit
+      console.log('Executing deposit transaction');
+      const depositTx = await this.teller.deposit(
+        depositAsset,
+        depositAmount,
+        minimumMint
+      );
+
+      console.log(`Deposit transaction submitted: ${depositTx.hash}`);
+      return depositTx;
+
+    } catch (error) {
+      console.error('Deposit failed', {
+        error: error.message,
+        asset: depositAsset,
+        amount: ethers.formatEther(depositAmount)
+      });
+      throw error;
     }
   }
 }
