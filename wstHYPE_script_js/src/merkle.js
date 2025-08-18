@@ -1,255 +1,201 @@
 const fs = require('fs');
 const path = require('path');
-const logger = require('./logger');
 
-// Path to pre-generated Merkle proofs
+// Path to pre-generated leafs file
 const LEAFS_PATH = path.join(__dirname, '../../leafs/HyperLiquid/WstHypeLoopingDeploymentLeafs.json');
 
-// Cache for loaded proof data
-let cachedProofData = null;
+// Cache for loaded data
+let cachedData = null;
 
 /**
- * Load pre-generated Merkle proofs from filesystem
- * @returns {Object} Parsed proof data with leafs and tree
+ * Load leafs data from filesystem
+ * @returns {Object} Parsed leafs data
  */
-function loadProofData() {
-    try {
-        if (cachedProofData) {
-            return cachedProofData;
-        }
-        
-        if (!fs.existsSync(LEAFS_PATH)) {
-            throw new Error(`Merkle proof file not found at: ${LEAFS_PATH}`);
-        }
-        
-        const rawData = fs.readFileSync(LEAFS_PATH, 'utf8');
-        cachedProofData = JSON.parse(rawData);
-        
-        logger.info('Loaded pre-generated Merkle proofs', {
-            leafCount: cachedProofData.leafs.length,
-            manageRoot: cachedProofData.metadata.ManageRoot,
-            treeCapacity: cachedProofData.metadata.TreeCapacity
-        });
-        
-        return cachedProofData;
-    } catch (error) {
-        logger.error('Error loading proof data:', error);
-        throw error;
+function loadLeafsData() {
+    if (cachedData) {
+        return cachedData;
     }
+    
+    if (!fs.existsSync(LEAFS_PATH)) {
+        throw new Error(`Leafs file not found at: ${LEAFS_PATH}`);
+    }
+    
+    const rawData = fs.readFileSync(LEAFS_PATH, 'utf8');
+    cachedData = JSON.parse(rawData);
+    
+    return cachedData;
 }
 
 /**
- * Generate Merkle proof for specific leaf by description
+ * Get proof for leaf by description - matches test pattern
  * @param {string} description - Leaf description to find
- * @returns {Array} Merkle proof array (bytes32[])
+ * @returns {Array} Merkle proof (bytes32[])
  */
 function getProofForLeaf(description) {
-    try {
-        const proofData = loadProofData();
-        
-        // Find leaf by description
-        const leafIndex = proofData.leafs.findIndex(leaf => 
-            leaf.Description.toLowerCase().includes(description.toLowerCase())
-        );
-        
-        if (leafIndex === -1) {
-            throw new Error(`Leaf not found for description: ${description}`);
-        }
-        
-        const leaf = proofData.leafs[leafIndex];
-        
-        // Generate proof using the pre-built Merkle tree
-        const proof = generateProofFromTree(leafIndex, proofData.MerkleTree);
-        
-        logger.debug('Generated proof for leaf', {
-            description,
-            leafIndex,
-            leafDigest: leaf.LeafDigest,
-            proofLength: proof.length
-        });
-        
-        return proof;
-    } catch (error) {
-        logger.error('Error generating proof for leaf:', error);
-        throw error;
+    const data = loadLeafsData();
+    
+    // Find leaf by description
+    const leafIndex = data.leafs.findIndex(leaf => 
+        leaf.Description.toLowerCase().includes(description.toLowerCase())
+    );
+    
+    if (leafIndex === -1) {
+        throw new Error(`Leaf not found: ${description}`);
     }
+    
+    const leaf = data.leafs[leafIndex];
+    const leafDigest = leaf.LeafDigest;
+    
+    // Generate proof using the tree structure (matches Solidity _generateProof)
+    return generateProof(leafDigest, data.MerkleTree);
 }
 
 /**
- * Generate Merkle proofs for looping strategy operations
- * Based on WstHypeLoopingUManager._prepareLoopingBatch: 5 operations per loop
- * @param {Object} params - Strategy parameters
- * @returns {Array} Array of Merkle proofs (bytes32[][])
- */
-function generateLoopingProofs(params) {
-    try {
-        const { leverageLoops } = params;
-        const proofs = [];
-        
-        // Each loop has exactly 5 operations (from contract analysis)
-        for (let i = 0; i < leverageLoops; i++) {
-            // 1. Unwrap wHYPE to HYPE (withdraw)
-            const withdrawProof = getProofForLeaf('Withdraw wHYPE to get HYPE');
-            proofs.push(withdrawProof);
-            
-            // 2. Mint stHYPE from overseer (with HYPE value)
-            const mintProof = getProofForLeaf('Mint stHYPE from overseer');
-            proofs.push(mintProof);
-            
-            // 3. Approve wstHYPE to Felix
-            const approveProof = getProofForLeaf('Approve Felix to spend wstHYPE');
-            proofs.push(approveProof);
-            
-            // 4. Supply wstHYPE as collateral to Felix
-            const supplyProof = getProofForLeaf('Felix supply collateral');
-            proofs.push(supplyProof);
-            
-            // 5. Borrow wHYPE from Felix
-            const borrowProof = getProofForLeaf('Felix borrow wHYPE');
-            proofs.push(borrowProof);
-        }
-        
-        logger.info('Generated looping strategy Merkle proofs', {
-            leverageLoops,
-            totalOperations: leverageLoops * 5,
-            proofCount: proofs.length
-        });
-        
-        return proofs;
-    } catch (error) {
-        logger.error('Error generating looping proofs:', error);
-        throw error;
-    }
-}
-
-/**
- * Generate Merkle proofs for unwinding strategy operations
- * Based on WstHypeLoopingUManager._prepareUnwindingBatch: 6 total operations
- * @param {Object} params - Strategy parameters
- * @returns {Array} Array of Merkle proofs (bytes32[][])
- */
-function generateUnwindingProofs() {
-    try {
-        const proofs = [];
-        
-        // Unwinding has exactly 6 operations (from contract analysis)
-        // 1. Approve wHYPE for repayment
-        const approveWHypeProof = getProofForLeaf('Approve wHYPE for Felix repayment');
-        proofs.push(approveWHypeProof);
-        
-        // 2. Repay loan to Felix
-        const repayProof = getProofForLeaf('Felix repay wHYPE loan');
-        proofs.push(repayProof);
-        
-        // 3. Withdraw collateral from Felix
-        const withdrawCollateralProof = getProofForLeaf('Felix withdraw wstHYPE collateral');
-        proofs.push(withdrawCollateralProof);
-        
-        // 4. Approve stHYPE for burning
-        const approveStHypeProof = getProofForLeaf('Approve stHYPE for Overseer burn');
-        proofs.push(approveStHypeProof);
-        
-        // 5. Burn stHYPE and redeem if possible
-        const burnProof = getProofForLeaf('Burn stHYPE and redeem HYPE');
-        proofs.push(burnProof);
-        
-        // 6. Wrap HYPE to wHYPE (deposit with value)
-        const wrapProof = getProofForLeaf('Deposit HYPE to get wHYPE');
-        proofs.push(wrapProof);
-        
-        logger.info('Generated unwinding strategy Merkle proofs', {
-            totalOperations: 6,
-            proofCount: proofs.length
-        });
-        
-        return proofs;
-    } catch (error) {
-        logger.error('Error generating unwinding proofs:', error);
-        throw error;
-    }
-}
-
-/**
- * Generate Merkle proofs for burn redemption operations
- * Based on WstHypeLoopingUManager.completeBurnRedemptions: 1 operation per burnId
- * @param {Object} params - Strategy parameters
- * @returns {Array} Array of Merkle proofs (bytes32[][])
- */
-function generateBurnRedemptionProofs(params) {
-    try {
-        const { burnIds } = params;
-        const proofs = [];
-        
-        // Each burn ID requires exactly 1 redeem operation
-        for (let i = 0; i < burnIds.length; i++) {
-            const redeemProof = getProofForLeaf('Redeem completed burn request');
-            proofs.push(redeemProof);
-        }
-        
-        logger.info('Generated burn redemption Merkle proofs', {
-            burnIdCount: burnIds.length,
-            proofCount: proofs.length
-        });
-        
-        return proofs;
-    } catch (error) {
-        logger.error('Error generating burn redemption proofs:', error);
-        throw error;
-    }
-}
-
-/**
- * Generate Merkle proof from tree data
- * @param {number} leafIndex - Index of the leaf in the tree
- * @param {Object} treeData - Merkle tree data
+ * Generate proof for a leaf digest - matches Solidity MerkleTreeHelper._generateProof exactly
+ * @param {string} leafDigest - The leaf hash to generate proof for
+ * @param {Object} tree - Merkle tree structure
  * @returns {Array} Merkle proof
  */
-function generateProofFromTree(leafIndex, treeData) {
-    const proof = [];
+function generateProof(leafDigest, tree) {
+    // Convert tree object to array format that matches Solidity
+    // Solidity expects: tree[0] = leafs, tree[1] = level1, ..., tree[n] = root
+    // JSON has: {"0": [root], "1": [...], "4": [leafs]} - need to reverse
+    const treeArray = [];
+    const maxLevel = Math.max(...Object.keys(tree).map(Number));
+    
+    // Reverse the tree structure to match Solidity format
+    for (let i = maxLevel; i >= 0; i--) {
+        treeArray.push(tree[i.toString()]);
+    }
+    
+    // Find leaf in bottom layer (tree[0] in Solidity format)
+    const leafIndex = treeArray[0].findIndex(hash => hash === leafDigest);
+    
+    if (leafIndex === -1) {
+        throw new Error('Leaf not found in tree');
+    }
+    
+    // The length of each proof is the height of the tree - 1
+    const proof = new Array(treeArray.length - 1);
     let currentIndex = leafIndex;
     
-    // Start from the leaf level (highest level number)
-    const maxLevel = Math.max(...Object.keys(treeData).map(Number));
-    
-    for (let level = maxLevel; level > 0; level--) {
-        const levelNodes = treeData[level];
-        if (!levelNodes || currentIndex >= levelNodes.length) {
-            break;
-        }
-        
+    // Build proof by traversing up the tree (matches Solidity logic exactly)
+    for (let i = 0; i < treeArray.length - 1; i++) {
         // Determine sibling index
-        const isRightNode = currentIndex % 2 === 1;
-        const siblingIndex = isRightNode ? currentIndex - 1 : currentIndex + 1;
-        
-        // Add sibling to proof if it exists
-        if (siblingIndex < levelNodes.length) {
-            proof.push(levelNodes[siblingIndex]);
+        let siblingIndex;
+        if (currentIndex % 2 === 0) {
+            // Current is left child, sibling is right
+            siblingIndex = currentIndex + 1;
+            if (siblingIndex >= treeArray[i].length) {
+                // No right sibling exists, use current node (duplicate case)
+                siblingIndex = currentIndex;
+            }
+        } else {
+            // Current is right child, sibling is left
+            siblingIndex = currentIndex - 1;
         }
         
-        // Move to parent index for next level
-        currentIndex = Math.floor(currentIndex / 2);
+        proof[i] = treeArray[i][siblingIndex];
+        currentIndex = Math.floor(currentIndex / 2); // Move to parent index in next layer
     }
     
     return proof;
 }
 
 /**
- * Get the Merkle root from pre-generated data
+ * Get Merkle root
  * @returns {string} Merkle root hash
  */
 function getMerkleRoot() {
-    try {
-        const proofData = loadProofData();
-        return proofData.metadata.ManageRoot;
-    } catch (error) {
-        logger.error('Error getting Merkle root:', error);
-        throw error;
+    const data = loadLeafsData();
+    return data.metadata.ManageRoot;
+}
+
+/**
+ * Get all available leaf descriptions
+ * @returns {Array} Array of descriptions
+ */
+function getAvailableLeafs() {
+    const data = loadLeafsData();
+    return data.leafs.map(leaf => leaf.Description);
+}
+
+/**
+ * Get proofs for multiple looping cycles
+ * @param {number} loops - Number of leverage loops to execute
+ * @returns {Array} Array of proofs (bytes32[][]) for all operations
+ */
+function getLoopingProofs(loops = 1) {
+    const proofs = [];
+    
+    // Each loop requires 5 operations (0-4)
+    for (let i = 0; i < loops; i++) {
+        proofs.push(getProofForLeaf('Withdraw wHYPE to get HYPE'));           // 0
+        proofs.push(getProofForLeaf('Mint stHYPE from overseer'));            // 1
+        proofs.push(getProofForLeaf('Approve Felix to spend wstHYPE'));       // 2
+        proofs.push(getProofForLeaf('Felix supply collateral'));             // 3
+        proofs.push(getProofForLeaf('Felix borrow wHYPE'));                   // 4
     }
+    
+    return proofs;
+}
+
+/**
+ * Get proofs for unwinding operations (single sequence)
+ * @returns {Array} Array of proofs (bytes32[][]) for unwinding
+ */
+function getUnwindingProofs() {
+    const proofs = [];
+    
+    // Unwinding operations in order (5-10)
+    proofs.push(getProofForLeaf('Approve wHYPE for Felix repayment'));    // 5
+    proofs.push(getProofForLeaf('Felix repay wHYPE loan'));               // 6
+    proofs.push(getProofForLeaf('Felix withdraw wstHYPE collateral'));    // 7
+    proofs.push(getProofForLeaf('Approve stHYPE for Overseer burn'));     // 8
+    proofs.push(getProofForLeaf('Burn stHYPE and redeem HYPE'));          // 9
+    proofs.push(getProofForLeaf('Deposit HYPE to get wHYPE'));            // 10
+    
+    return proofs;
+}
+
+/**
+ * Get proofs for multiple burn redemptions
+ * @param {number} burnCount - Number of burn redemptions to process
+ * @returns {Array} Array of proofs (bytes32[][]) for burn redemptions
+ */
+function getBurnRedemptionProofs(burnCount) {
+    const proofs = [];
+    
+    // Each burn requires 1 redemption operation 
+    for (let i = 0; i < burnCount; i++) {
+        proofs.push(getProofForLeaf('Redeem completed burn request'));
+    }
+    
+    return proofs;
+}
+
+/**
+ * Get proof for a single operation by index (0-11)
+ * @param {number} operationIndex - Index of operation (0-11)
+ * @returns {Array} Proof array (bytes32[])
+ */
+function getProofByIndex(operationIndex) {
+    const data = loadLeafsData();
+    
+    if (operationIndex < 0 || operationIndex >= data.leafs.length) {
+        throw new Error(`Invalid operation index: ${operationIndex}`);
+    }
+    
+    const leaf = data.leafs[operationIndex];
+    return generateProof(leaf.LeafDigest, data.MerkleTree);
 }
 
 module.exports = {
-    generateLoopingProofs,
-    generateUnwindingProofs,
-    generateBurnRedemptionProofs,
-    getMerkleRoot
+    getProofForLeaf,
+    getProofByIndex,
+    getMerkleRoot,
+    getAvailableLeafs,
+    getLoopingProofs,
+    getUnwindingProofs,
+    getBurnRedemptionProofs
 };
